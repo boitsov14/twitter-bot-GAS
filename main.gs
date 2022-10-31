@@ -1,56 +1,78 @@
 function make_reply() {
-  const twitter = getTwitterService()
-  if (twitter.hasAccess()) {
-    Logger.log('Searching for replies...')
-    const SINCE_ID = PropertiesService.getScriptProperties().getProperty('SINCE_ID')
-    const url_twitter = `https://api.twitter.com/2/users/1493111775042043904/mentions?expansions=author_id&user.fields=username&since_id=${SINCE_ID}`
-    const response_twitter = JSON.parse(twitter.fetch(url_twitter).getContentText())
-    if (response_twitter.meta.result_count === 0) return
 
-    const tweets = response_twitter.data.filter(tweet => tweet.text.startsWith('@sequent_bot'))
-    if (Object.keys(tweets).length === 0) {
-      PropertiesService.getScriptProperties().setProperty('SINCE_ID', response_twitter.meta.newest_id)
+  Logger.log('Searching')
+
+  // ツイートの取得
+  const SINCE_ID = PropertiesService.getScriptProperties().getProperty('SINCE_ID')
+  const twitter_url = `https://api.twitter.com/2/users/1493111775042043904/mentions?expansions=author_id&tweet.fields=created_at&user.fields=username&since_id=${SINCE_ID}`
+  const twitter_options = {
+    'headers': {
+      'Authorization': 'Bearer ' + PropertiesService.getScriptProperties().getProperty('BEARER_TOKEN')
+    }
+  }
+  const twitter_response = JSON.parse(UrlFetchApp.fetch(twitter_url, twitter_options).getContentText())
+  Logger.log(twitter_response)
+
+  // ツイート数が0なら終了
+  if (twitter_response.meta.result_count === 0) return
+
+  // author idとusernameを対応づける
+  const id_to_username = {}
+  for (const user of twitter_response.includes.users) {
+    id_to_username[user.id] = user.username
+  }
+
+  // ツイートを古い順にする
+  twitter_response.data.reverse()
+
+  for (const tweet of twitter_response.data) {
+
+    // ツイートが@sequent_botから始まらない場合は無視
+    if (!tweet.text.startsWith('@sequent_bot')) {
+      update_since_id(tweet.id)
+      continue
+    }
+
+    // ツイートが5分前までに生成されたものである場合は終了
+    if (new Date().getTime() - Date.parse(tweet.created_at) < 5 * 60 * 1000) {
       return
     }
 
-    const users = response_twitter.includes.users
-    const id_to_username = new Object()
-    for (const user of users) {
-      id_to_username[user.id] = user.username
-    }
-    for (const tweet of tweets) {
-      tweet.username = id_to_username[tweet.author_id]
-      delete tweet.author_id
+    // ツイートがstreaming apiの方で検知済みなら無視
+    const backup_url = PropertiesService.getScriptProperties().getProperty('BACKUP_URL') + '?id=' + tweet.id
+    if (JSON.parse(UrlFetchApp.fetch(backup_url).getContentText())) {
+      Logger.log('Already replied')
+      update_since_id(tweet.id)
+      continue
     }
 
-    Logger.log(tweets)
-    const send_data = {
-      'tweets': tweets,
-      'password': PropertiesService.getScriptProperties().getProperty('PASSWORD')
+    // 送信するツイートの設定
+    const payload = {
+      'id': tweet.id,
+      'username': id_to_username[tweet.author_id],
+      'text': tweet.text
     }
+    Logger.log(payload)
+
+    // ツイートの送信
     const options = {
       'method': 'post',
       'contentType': 'application/json',
-      'payload': JSON.stringify(send_data)
+      'payload': JSON.stringify(payload),
+      'headers': {
+        'Authorization': 'Bearer ' + PropertiesService.getScriptProperties().getProperty('PASSWORD')
+      }
     }
-    const url = PropertiesService.getScriptProperties().getProperty('URL') + '/twitter_bot'
+    const url = PropertiesService.getScriptProperties().getProperty('URL') + '/twitter'
     const response = UrlFetchApp.fetch(url, options)
     Logger.log(response.getContentText())
-    PropertiesService.getScriptProperties().setProperty('SINCE_ID', response_twitter.meta.newest_id)
-  } else {
-    Logger.log('Error: Cannot access twitter.')
+    update_since_id(tweet.id)
+
+    // 1トリガーにつきツイートは1回のみで終了
+    return
   }
 }
 
-function getTwitterService() {
-  const url = 'https://api.twitter.com/oauth/authorize'
-  const API_KEY = PropertiesService.getScriptProperties().getProperty('API_KEY')
-  const API_KEY_SECRET = PropertiesService.getScriptProperties().getProperty('API_KEY_SECRET')
-  const ACCESS_TOKEN = PropertiesService.getScriptProperties().getProperty('ACCESS_TOKEN')
-  const ACCESS_TOKEN_SECRET = PropertiesService.getScriptProperties().getProperty('ACCESS_TOKEN_SECRET')
-  return OAuth1.createService('Twitter')
-    .setAuthorizationUrl(url)
-    .setConsumerKey(API_KEY)
-    .setConsumerSecret(API_KEY_SECRET)
-    .setAccessToken(ACCESS_TOKEN, ACCESS_TOKEN_SECRET)
+function update_since_id(since_id) {
+  PropertiesService.getScriptProperties().setProperty('SINCE_ID', since_id)
 }
