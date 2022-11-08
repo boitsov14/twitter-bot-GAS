@@ -69,7 +69,8 @@ function make_reply() {
     update_since_id(tweet.id)
 
     // 1トリガーにつきツイートは1回のみで終了
-    return
+    // エラー記録を残すため例外で落とす
+    throw new Error('Not replied')
   }
 }
 
