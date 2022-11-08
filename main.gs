@@ -3,8 +3,8 @@ function make_reply() {
   Logger.log('Searching')
 
   // ツイートの取得
-  const SINCE_ID = PropertiesService.getScriptProperties().getProperty('SINCE_ID')
-  const twitter_url = `https://api.twitter.com/2/users/1493111775042043904/mentions?expansions=author_id&tweet.fields=created_at&user.fields=username&since_id=${SINCE_ID}`
+  const since_id = PropertiesService.getScriptProperties().getProperty('SINCE_ID')
+  const twitter_url = `https://api.twitter.com/2/users/1493111775042043904/mentions?expansions=author_id&tweet.fields=created_at&user.fields=username&since_id=${since_id}`
   const twitter_options = {
     'headers': {
       'Authorization': 'Bearer ' + PropertiesService.getScriptProperties().getProperty('BEARER_TOKEN')
