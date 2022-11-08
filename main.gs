@@ -33,8 +33,8 @@ function make_reply() {
       continue
     }
 
-    // ツイートが5分前までに生成されたものである場合は終了
-    if (new Date().getTime() - Date.parse(tweet.created_at) < 5 * 60 * 1000) {
+    // ツイートが3分前までに生成されたものである場合は終了
+    if (new Date().getTime() - Date.parse(tweet.created_at) < 3 * 60 * 1000) {
       return
     }
 
